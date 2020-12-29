@@ -1,0 +1,118 @@
+---
+title: "NLP Deliverable"
+output: html_notebook
+---
+
+## Madrid's airbnb reviews, sentiment analysis        
+# *Author:* Ana Marin Estañ                        
+
+
+
+## 1. Import libraries and data
+
+* Check if all needed packages are installed and libraries added
+* Set work directory
+* Import data (reviews.csv)
+
+
+```{r}
+packages <- c("rstudioapi", 
+              "DT", 
+              "tm",
+              "ggplot2",
+              "googleLanguageR",
+              "wordcloud",
+              "RWeka",
+              "reshape2", 
+              "tidyverse", 
+              "tidytext", 
+              "stringr")
+
+install.packages(setdiff(packages, rownames(installed.packages())))  
+
+library(rstudioapi)
+library(DT)
+library(tm)
+library(ggplot2)
+library(googleLanguageR)
+library(wordcloud)
+library(RWeka)
+library(reshape2)
+library(tidyverse)
+library(tidytext)
+library(stringr)
+```
+
+```{r}
+current_path <- getActiveDocumentContext()$path 
+setwd(dirname(current_path))
+
+wdir <- getwd()
+cat("Working directory: ", wdir)
+```
+
+### Imported data
+```{r}
+reviews <- read_csv("data/reviews.csv")
+
+datatable(head(reviews, 10))
+```
+
+
+## 2. Load and inspect Corpus 
+
+First, corpus is created form review dataset.
+
+Corpus length is 674987 entries. We're going to work with just the first 1000 entries.
+
+We can also consult the summary and inspect the corpus entries: its content and metadata.
+
+```{r}
+corpus = Corpus(VectorSource(reviews$comments))
+cat("Original corpus length:", length(corpus), "entries")
+
+corpus = corpus[1:1000]
+cat("New corpus lenth:", length(corpus), "entries")
+
+summary(corpus[1:5])
+inspect(corpus[[1]])
+meta(corpus[[1]])
+```
+
+
+## 3. Create and transform TDM 
+
+In this section a Term-Document matrix is created with the following transformations:
+
+* Text set to lower case
+* Strip white spaces
+* Remove English stopwords
+* Remove punctuarions
+* Remove numbers
+* Stemming
+* TF_IDF weighting
+* Remove empty documents
+
+
+
+```{r}
+tdm = TermDocumentMatrix(corpus,
+                         control = list(tolower = TRUE,
+                                        stopwords = TRUE,
+                                        removePunctuation = TRUE, 
+                                        removeNumbers = TRUE,
+                                        stemming = TRUE,
+                                        stripWhitespace = TRUE,
+                                        weighting = weightTfIdf)
+                         )
+
+colTotals <- apply(tdm, 2, sum) 
+tdm <- tdm[ , colTotals> 0]
+tdm
+inspect(tdm[2500:2510,1:10])
+```
+
+```{r}
+
+```
+

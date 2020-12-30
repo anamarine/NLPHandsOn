@@ -1,118 +1,262 @@
 ---
-title: "NLP Deliverable"
+title: 'NLP Deliverable'
+author: 'Ana Marin Estañ'
 output: html_notebook
 ---
 
-## Madrid's airbnb reviews, sentiment analysis        
-# *Author:* Ana Marin Estañ                        
+# **Madrid's airbnb reviews, sentiment analysis**
 
+&nbsp;
 
+&nbsp;
 
-## 1. Import libraries and data
+## 1. Check prerequesites
 
-* Check if all needed packages are installed and libraries added
+* Check if all needed packages are installed and added to the library
 * Set work directory
-* Import data (reviews.csv)
 
 
 ```{r}
-packages <- c("rstudioapi", 
-              "DT", 
-              "tm",
-              "ggplot2",
-              "googleLanguageR",
-              "wordcloud",
-              "RWeka",
-              "reshape2", 
-              "tidyverse", 
-              "tidytext", 
-              "stringr")
+options(warn=-1)
+
+packages <- c('rstudioapi', 
+              'DT', 
+              'tm',
+              'ggplot2',
+              'textcat',
+              'wordcloud',
+              'RWeka',
+              'reshape2', 
+              'tidyverse', 
+              'tidytext', 
+              'stringr',
+              'dplyr', 
+              'topicmodels')
 
 install.packages(setdiff(packages, rownames(installed.packages())))  
+rm(packages)
 
 library(rstudioapi)
 library(DT)
 library(tm)
 library(ggplot2)
-library(googleLanguageR)
+library(textcat)
 library(wordcloud)
 library(RWeka)
 library(reshape2)
 library(tidyverse)
 library(tidytext)
 library(stringr)
+library(dplyr)
+library(topicmodels)
 ```
 
 ```{r}
-current_path <- getActiveDocumentContext()$path 
-setwd(dirname(current_path))
-
-wdir <- getwd()
-cat("Working directory: ", wdir)
+setwd(dirname(getActiveDocumentContext()$path ))
+cat('Working directory:', getwd())
 ```
 
-### Imported data
-```{r}
-reviews <- read_csv("data/reviews.csv")
+&nbsp;
 
+## 2. Import data and basic exploration
+
+* Import review data form data folder
+* Explore number of reviews and features
+* Display basic data table
+
+```{r}
+reviews <- read_csv('data/reviews.csv')
+cat('Number of reviews:', nrow(reviews), '\nColumn names:', names(reviews))
+```
+
+```{r}
 datatable(head(reviews, 10))
 ```
 
+&nbsp;
 
-## 2. Load and inspect Corpus 
+## 3. Basic data preprocessing 
 
-First, corpus is created form review dataset.
-
-Corpus length is 674987 entries. We're going to work with just the first 1000 entries.
-
-We can also consult the summary and inspect the corpus entries: its content and metadata.
+* Limit data to 2500 random reviews 
+* Detect review language
+* Group reviews by language and show 10 most frequent languages
+* Keep reviews written in English and Spanish (two most frequent languages) in two different data frames
+* Remove empty reviews
 
 ```{r}
-corpus = Corpus(VectorSource(reviews$comments))
-cat("Original corpus length:", length(corpus), "entries")
+reviewsPrep = reviews[sample(nrow(reviews), 2500),]
 
-corpus = corpus[1:1000]
-cat("New corpus lenth:", length(corpus), "entries")
+reviewsPrep$language <- textcat(reviewsPrep$comments)
+reviewsPrep$language <- as.factor(reviewsPrep$language)
 
-summary(corpus[1:5])
-inspect(corpus[[1]])
-meta(corpus[[1]])
+languageCount = count(reviewsPrep, language)
+languageCount = languageCount[order(languageCount$n, decreasing = T),]
+languageCount$percentage <- (languageCount$n/2000)*100
+languageCount[1:10,]
+
+reviewsEn = reviewsPrep[c(reviewsPrep$language == 'english'),]
+reviewsEs = reviewsPrep[c(reviewsPrep$language == 'spanish'),]
+
+reviewsEn = reviewsEn[!(is.na(reviewsEn$comments) | reviewsEn$comments==''), ]
+reviewsEs = reviewsEs[!(is.na(reviewsEs$comments) | reviewsEs$comments==''), ]
 ```
 
+&nbsp;
 
-## 3. Create and transform TDM 
+## 4. Corpora creation, inspection and transformations 
 
-In this section a Term-Document matrix is created with the following transformations:
+Two different corpora are created: one containing English reviews, and other with the Spanish ones.
+First, these corpora are inspected:
 
-* Text set to lower case
-* Strip white spaces
-* Remove English stopwords
-* Remove punctuarions
-* Remove numbers
+* Check length
+* Summary of 5 first entries
+* Meta and content of first entry
+
+Each of this corpora is preprocessed:
+
+* Limit number of entries to 1000
+* Transform to lower case
+* Remove numbers, Stopwords and punctuation
 * Stemming
-* TF_IDF weighting
-* Remove empty documents
+* Strip white spaces
 
+Finally, the first document of each corpus is compared before and after being preprocessed
 
+### English
+```{r}
+# Creation and inspection
+corpusEn = VCorpus(VectorSource(reviewsEn$comments))
+cat('English corpus length:', length(corpusEn), 'entries')
+
+summary(corpusEn[1:5]); meta(corpusEn[[1]]); content(corpusEn[[1]])
+
+# Transformation
+if(length(corpusEn) > 1000) {
+  corpusEn=corpusEn[1:1000]
+  cat('Limit English corpus length to:', length(corpusEn), 'entries')
+  }
+stopwordsEn = c(stopwords(),'airbnb', 'madrid','stay')
+corpusEnT <- tm_map(corpusEn, content_transformer(tolower))
+corpusEnT <- tm_map(corpusEnT, content_transformer(removeNumbers))
+corpusEnT <- tm_map(corpusEnT, content_transformer(removeWords), stopwordsEn)
+corpusEnT <- tm_map(corpusEnT, content_transformer(removePunctuation))
+corpusEnT <- tm_map(corpusEnT, content_transformer(stemDocument))
+corpusEnT <- tm_map(corpusEnT, content_transformer(stripWhitespace))
+```
+
+Original and transformed reviews
+```{r}
+corpusEn[['100']][['content']]
+corpusEnT[['100']][['content']]
+```
+
+### Spanish
+```{r}
+# Creation and inspection
+corpusEs = VCorpus(VectorSource(reviewsEs$comments))
+cat('Spanish corpus length:', length(corpusEs), 'entries')
+summary(corpusEs[1:5]); meta(corpusEs[[1]]); content(corpusEs[[1]])
+
+# Transformation
+if(length(corpusEs) > 1000) {
+  corpusEs=corpusEs[1:1000]
+  cat('Limit Spanish corpus length to:', length(corpusEs), 'entries')
+  }
+  
+stopwordsEs = c(stopwords('spanish'), 'madrid', 'airbnb')
+corpusEsT <- tm_map(corpusEs, content_transformer(tolower))
+corpusEsT <- tm_map(corpusEsT, content_transformer(removeNumbers))
+corpusEsT <- tm_map(corpusEsT, content_transformer(removeWords), stopwordsEs)
+corpusEsT <- tm_map(corpusEsT, content_transformer(removePunctuation))
+corpusEsT <- tm_map(corpusEsT, content_transformer(stemDocument))
+corpusEsT <- tm_map(corpusEsT, content_transformer(stripWhitespace))
+```
+
+Original and transformed reviews
+```{r}
+corpusEs[['50']][['content']]
+corpusEsT[['50']][['content']]
+```
+
+&nbsp;
+
+## 5. Create TDM
+
+In this section Term-Document matrixes are created with TF-IDF weighting
 
 ```{r}
-tdm = TermDocumentMatrix(corpus,
-                         control = list(tolower = TRUE,
-                                        stopwords = TRUE,
-                                        removePunctuation = TRUE, 
-                                        removeNumbers = TRUE,
-                                        stemming = TRUE,
-                                        stripWhitespace = TRUE,
-                                        weighting = weightTfIdf)
-                         )
+tdmEn = TermDocumentMatrix(corpusEnT, control = list(weighting = weightTfIdf))
+tdmEn
 
-colTotals <- apply(tdm, 2, sum) 
-tdm <- tdm[ , colTotals> 0]
-tdm
-inspect(tdm[2500:2510,1:10])
+tdmEs = TermDocumentMatrix(corpusEsT, control = list(weighting = weightTfIdf))
+tdmEs
+```
+
+&nbsp;
+
+## 6. Basic text analysis
+
+* TF-IDF word frequencies
+* Most relevant words
+* Word clouds
+```{r}
+#TF-IDF word frequencies
+freqEn=rowSums(as.matrix(tdmEn))
+freqEs=rowSums(as.matrix(tdmEs))
+par(mfrow=c(2,1), mar = c(2, 2, 2, 2))
+plot(sort(freqEn, decreasing = TRUE),col='blue',main='Word TF-IDF frequencies (English)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
+plot(sort(freqEs, decreasing = TRUE),col='red',main='Word TF-IDF frequencies (Spanish)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
+print('10 most relevant words in English:'); tail(sort(freqEn),n=10)
+print('10 most relevant words in Spanish:'); tail(sort(freqEs),n=10)
 ```
 
 ```{r}
+#Word Clouds
+palEn=brewer.pal(4,'Blues')
+palEs=brewer.pal(4,'Reds')
+par(mfrow=c(1,1))
 
+unigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+tdmEn.unigram = TermDocumentMatrix(corpusEnT,
+                                control = list (weighting = weightTfIdf,
+                                                tokenize = unigramTokenizer))
+tdmEs.unigram = TermDocumentMatrix(corpusEsT,
+                                   control = list (weighting = weightTfIdf,
+                                                   tokenize = unigramTokenizer))
 ```
+
+```{r}
+# Plot English Wordcloud
+freqEn = sort(rowSums(as.matrix(tdmEn.unigram)),decreasing = TRUE)
+freqEn.df = data.frame(word=names(freqEn), freq=freqEn)
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "English wordcloud", cex=1.5,font=2)
+wordcloud(freqEn.df$word,freqEn.df$freq,max.words=100,random.order = FALSE, colors=palEn)
+```
+
+```{r}
+# Plot Spanish Wordcloud
+freqEs = sort(rowSums(as.matrix(tdmEs.unigram)),decreasing = TRUE)
+freqEs.df = data.frame(word=names(freqEs), freq=freqEs)
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "Spanish wordcloud", cex=1.5,font=2)
+wordcloud(freqEs.df$word,freqEs.df$freq,max.words=100,random.order = FALSE, colors=palEs)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 

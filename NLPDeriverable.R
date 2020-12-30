@@ -23,6 +23,7 @@ packages <- c('rstudioapi',
               'topicmodels')
 
 install.packages(setdiff(packages, rownames(installed.packages())))  
+rm(packages)
 
 library(rstudioapi)
 library(DT)
@@ -40,10 +41,8 @@ library(topicmodels)
 
 
 #Set work dir
-current_path <- getActiveDocumentContext()$path 
-setwd(dirname(current_path))
-wdir <- getwd()
-cat('Working directory:', wdir)
+setwd(dirname(getActiveDocumentContext()$path ))
+cat('Working directory:', getwd())
 
 
 #__ 2. Import data and basic exploration _______________________________
@@ -73,68 +72,121 @@ languageCount = languageCount[order(languageCount$n, decreasing = T),]
 languageCount$percentage <- (languageCount$n/2000)*100
 languageCount[1:10,]
 
-# Keep only English reviews
-rowsToKeep = c(reviewsPrep$language == 'english')
+# Keep reviews written in English and Spanish (two most frequent languages)
+# in different data frames
 
-reviewsPrep = reviewsPrep[rowsToKeep,]
-
+reviewsEn = reviewsPrep[c(reviewsPrep$language == 'english'),]
+reviewsEs = reviewsPrep[c(reviewsPrep$language == 'spanish'),]
 # Remove empty reviews
-reviewsPrep=reviewsPrep[!(is.na(reviewsPrep$comments) | reviewsPrep$comments==""), ]
-
+reviewsEn = reviewsEn[!(is.na(reviewsEn$comments) | reviewsEn$comments==''), ]
+reviewsEs = reviewsEs[!(is.na(reviewsEs$comments) | reviewsEs$comments==''), ]
 
 #__ 4. Load and inspect Corpus _________________________________________
-corpus = Corpus(VectorSource(reviewsPrep$comments))
-cat('Corpus length:', length(corpus), 'entries')
-if(length(corpus) > 1000)
-  corpus=corpus[1:1000]
-  cat('Limit corpus length to:', length(corpus), 'entries')
-summary(corpus[1:5])
-inspect(corpus[[1]])
-meta(corpus[[1]])
-content(corpus[[1]])
+# Process English corpus
+corpusEn = Corpus(VectorSource(reviewsEn$comments))
+cat('English corpus length:', length(corpusEn), 'entries')
+if(length(corpusEn) > 1000)
+  corpusEn=corpusEn[1:1000]
+  cat('Limit English corpus length to:', length(corpusEn), 'entries')
+summary(corpusEn[1:5])
+inspect(corpusEn[[1]])
+meta(corpusEn[[1]])
+content(corpusEn[[1]])
+
+# Process Spanish corpus
+corpusEs = Corpus(VectorSource(reviewsEs$comments))
+cat('Spanish corpus length:', length(corpusEs), 'entries')
+if(length(corpusEs) > 1000)
+  corpusEs=corpusEs[1:1000]
+  cat('Limit Spanish corpus length to:', length(corpusEs), 'entries')
+
+content(corpusEs[[1]])
 
 
 #__ 5. Create and transform DTM ________________________________________
 
-myStopwords = c(stopwords(),"airbnb","very", "madrid","stay")
-corpusTransf <- tm_map(corpus, tolower)
-corpusTransf <- tm_map(corpusTransf, removeNumbers)
-corpusTransf <- tm_map(corpusTransf, removeWords, myStopwords)
-corpusTransf <- tm_map(corpusTransf, stemDocument)
-corpusTransf <- tm_map(corpusTransf, removePunctuation)
-corpusTransf <- tm_map(corpusTransf, stripWhitespace)
+stopwordsEn = c(stopwords(),'airbnb', 'madrid','stay')
+corpusEnT <- tm_map(corpusEn, tolower)
+corpusEnT <- tm_map(corpusEnT, removeNumbers)
+corpusEnT <- tm_map(corpusEnT, removeWords, stopwordsEn)
+corpusEnT <- tm_map(corpusEnT, stemDocument)
+corpusEnT <- tm_map(corpusEnT, removePunctuation)
+corpusEnT <- tm_map(corpusEnT, stripWhitespace)
+
+stopwordsEs = c(stopwords('spanish'), 'madrid', 'airbnb')
+corpusEsT <- tm_map(corpusEs, tolower)
+corpusEsT <- tm_map(corpusEsT, removeNumbers)
+corpusEsT <- tm_map(corpusEsT, removeWords, stopwordsEs)
+corpusEsT <- tm_map(corpusEsT, stemDocument)
+corpusEsT <- tm_map(corpusEsT, removePunctuation)
+corpusEsT <- tm_map(corpusEsT, stripWhitespace)
+
 
 # Compare transdormed documents
-corpus[["100"]][["content"]]; corpusTransf[["100"]][["content"]]
+corpusEn[['100']][['content']]; corpusEnT[['100']][['content']]
+corpusEs[['50']][['content']]; corpusEsT[['50']][['content']]
+
 
 #__ 6. Create TDM ______________________________________________________
 # create TDM with TF-IDF weighting
-tdm = TermDocumentMatrix(corpusTransf, control = list(weighting = weightTfIdf))
-tdm
+tdmEn = TermDocumentMatrix(corpusEnT, control = list(weighting = weightTfIdf))
+tdmEn
+
+tdmEs = TermDocumentMatrix(corpusEsT, control = list(weighting = weightTfIdf))
+tdmEs
+
+
 #__ 7. Basic text analysis _____________________________________________
 
 #TF-IDF word frequencies
-freq=rowSums(as.matrix(tdm))
-plot(sort(freq, decreasing = TRUE),col='red',main='Word TF-IDF frequencies', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
-tail(sort(freq),n=10)
+freqEn=rowSums(as.matrix(tdmEn))
+freqEs=rowSums(as.matrix(tdmEs))
+par(mfrow=c(2,1), mar = c(2, 2, 2, 2))
+plot(sort(freqEn, decreasing = TRUE),col='blue',main='Word TF-IDF frequencies (English)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
+plot(sort(freqEs, decreasing = TRUE),col='red',main='Word TF-IDF frequencies (Spanish)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
+print('10 most relevant words in English:'); tail(sort(freqEn),n=10)
+print('10 most relevant words in Spanish:'); tail(sort(freqEs),n=10)
 
-#Word Cloud
-pal=brewer.pal(8,"Reds")
+#Word Clouds
+palEn=brewer.pal(4,'Blues')
+palEs=brewer.pal(4,'Reds')
+par(mfrow=c(1,1))
+
 unigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
-tdm.unigram = TermDocumentMatrix(corpusTransf,
+tdmEn.unigram = TermDocumentMatrix(corpusEnT,
                                 control = list (weighting = weightTfIdf,
                                                 tokenize = unigramTokenizer))
-freq = sort(rowSums(as.matrix(tdm.unigram)),decreasing = TRUE)
-freq.df = data.frame(word=names(freq), freq=freq)
-wordcloud(freq.df$word,freq.df$freq,max.words=100,random.order = FALSE, colors=pal)
+tdmEs.unigram = TermDocumentMatrix(corpusEsT,
+                                   control = list (weighting = weightTfIdf,
+                                                   tokenize = unigramTokenizer))
 
+# Plot English Wordcloud
+freqEn = sort(rowSums(as.matrix(tdmEn.unigram)),decreasing = TRUE)
+freqEn.df = data.frame(word=names(freqEn), freq=freqEn)
+layout(matrix(c(1, 2), nrow=2), heights=c(1, 4))
+par(mar=rep(0, 4))
+plot.new()
+text(x=0.5, y=0.5, "English wordcloud", cex=2,font=2)
+wordcloud(freqEn.df$word,freqEn.df$freq,max.words=100,random.order = FALSE, colors=palEn)
+
+# Plot Spanish Wordcloud
+freqEs = sort(rowSums(as.matrix(tdmEs.unigram)),decreasing = TRUE)
+freqEs.df = data.frame(word=names(freqEs), freq=freqEs)
+plot.new()
+text(x=0.5, y=0.5, "Spanish wordcloud", cex=2,font=2)
+wordcloud(freqEs.df$word,freqEs.df$freq,max.words=100,random.order = FALSE, colors=palEs)
 
 #__ 8. Sentiment analysis ______________________________________________
-dtm <- DocumentTermMatrix(corpusTransf)
+#Get sentiments data frame
+dtmEn <- DocumentTermMatrix(corpusEnT)
+dtmEnTidy <- tidy(dtmEn)
+sentimentsEn <- dtmEnTidy %>%
+  inner_join(get_sentiments('bing'), by = c(term = 'word'))
 
-dtmTidy <- tidy(dtm)
-sentiments <- dtmTidy %>%
-  inner_join(get_sentiments("bing"), by = c(term = "word"))
+dtmEs <- DocumentTermMatrix(corpusEsT)
+dtmEsTidy <- tidy(dtmEs)
+sentimentsEs <- dtmEsTidy %>%
+  inner_join(get_sentiments('bing'), by = c(term = 'word'))
 
 # Find most positive reviews
 sentiments %>%
@@ -150,15 +202,15 @@ sentiments %>%
   mutate(sentiment = positive - negative) %>%
   arrange(sentiment)
 
-# Most contributive words to sentiments
+# Most sentiment-contributing words 
 sentiments %>%
   count(sentiment, term, wt = count) %>%
   filter(n >= 10) %>%
-  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(n = ifelse(sentiment == 'negative', -n, n)) %>%
   mutate(term = reorder(term, n)) %>%
   ggplot(aes(term, n, fill = sentiment)) +
-  geom_bar(stat = "identity") +
+  geom_bar(stat = 'identity') +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ylab("Contribution to sentiment")
+  ylab('Contribution to sentiment')
 
 

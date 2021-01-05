@@ -9,7 +9,7 @@
 Two options are provided to check and run the project. Both options contain the same code.
 
 ## Option 1. R script
-The R script,  NLPDeliverable.R, can be easily executed in an IDE like RStudio.
+The R script,  ```NLPDeliverable.R```, can be easily executed in an IDE like RStudio.
 
 ## Option 2. R notebook
 A notebook (``NLP.Rmd``) and an html file (``NLP.nb.html``) are additionally provided to make the understanding of the application easier. Moreover, the cells are executed so the results are already provided. 

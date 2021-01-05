@@ -10,6 +10,12 @@ output: html_notebook
 
 &nbsp;
 
+## 0. Select mode
+To speed up execution, if sampleReviews variable is set to true (default), only a 1% random sample of the reviews is selected to work with. 
+```{r}
+sampleReviews = TRUE
+```
+
 ## 1. Check prerequesites
 
 * Check if all needed packages are installed and added to the library
@@ -77,22 +83,25 @@ datatable(head(reviews, 10))
 
 ## 3. Basic data preprocessing 
 
-* Limit data to 2500 random reviews 
+* Limit data to 1% random reviews sample (if selected) 
 * Detect review language
 * Group reviews by language and show 10 most frequent languages
 * Keep reviews written in English and Spanish (two most frequent languages) in two different data frames
 * Remove empty reviews
 
 ```{r}
-reviewsPrep = reviews[sample(nrow(reviews), 2500),]
+if(sampleReviews) {
+  reviewsPrep = reviews[sample(nrow(reviews), as.integer(nrow(reviews)/100)),]
+} else {
+  reviewsPrep = reviews
+}
 
 reviewsPrep$language <- textcat(reviewsPrep$comments)
 reviewsPrep$language <- as.factor(reviewsPrep$language)
 
 languageCount = count(reviewsPrep, language)
 languageCount = languageCount[order(languageCount$n, decreasing = T),]
-languageCount$percentage <- (languageCount$n/2000)*100
-languageCount[1:10,]
+languageCount$percentage <- (languageCount$n/nrow(reviewsPrep))*100
 
 reviewsEn = reviewsPrep[c(reviewsPrep$language == 'english'),]
 reviewsEs = reviewsPrep[c(reviewsPrep$language == 'spanish'),]
@@ -114,7 +123,6 @@ First, these corpora are inspected:
 
 Each of this corpora is preprocessed:
 
-* Limit number of entries to 1000
 * Transform to lower case
 * Remove numbers, Stopwords and punctuation
 * Stemming
@@ -131,10 +139,6 @@ cat('English corpus length:', length(corpusEn), 'entries')
 summary(corpusEn[1:5]); meta(corpusEn[[1]]); content(corpusEn[[1]])
 
 # Transformation
-if(length(corpusEn) > 1000) {
-  corpusEn=corpusEn[1:1000]
-  cat('Limit English corpus length to:', length(corpusEn), 'entries')
-  }
 stopwordsEn = c(stopwords(),'airbnb', 'madrid','stay')
 corpusEnT <- tm_map(corpusEn, content_transformer(tolower))
 corpusEnT <- tm_map(corpusEnT, content_transformer(removeNumbers))
@@ -158,11 +162,6 @@ cat('Spanish corpus length:', length(corpusEs), 'entries')
 summary(corpusEs[1:5]); meta(corpusEs[[1]]); content(corpusEs[[1]])
 
 # Transformation
-if(length(corpusEs) > 1000) {
-  corpusEs=corpusEs[1:1000]
-  cat('Limit Spanish corpus length to:', length(corpusEs), 'entries')
-  }
-  
 stopwordsEs = c(stopwords('spanish'), 'madrid', 'airbnb')
 corpusEsT <- tm_map(corpusEs, content_transformer(tolower))
 corpusEsT <- tm_map(corpusEsT, content_transformer(removeNumbers))
@@ -196,24 +195,46 @@ tdmEs
 
 ## 6. Basic text analysis
 
-* TF-IDF word frequencies
-* Most relevant words
+* Language analysis
+* TF-IDF word frequencies (Zipf's law comporbation)
 * Word clouds
+* Most frequent word associations
 ```{r}
-#TF-IDF word frequencies
+# Adpaat params to number of reviews
+if(sampleReviews) {
+  maxWords = 100
+  lowFreqEn = 1000
+  lowFreqEs = 500
+} else {
+  maxWords = 10000
+  lowFreqEn = 100000
+  lowFreqEs = 50000
+}
+```
+
+```{r}
+# Language analysis
+languageCount[1:10,]
+p <- ggplot(data=select(languageCount[1:10, ], language, n), aes(x=reorder(language, -n), y=n)) +
+  geom_bar(stat='identity', fill='#2F3456')
+p + xlab('Reviews') +
+  ylab('Detected language') +
+  coord_flip()
+```
+
+```{r}
+#TF-IDF Zipf's law
 freqEn=rowSums(as.matrix(tdmEn))
 freqEs=rowSums(as.matrix(tdmEs))
 par(mfrow=c(2,1), mar = c(2, 2, 2, 2))
-plot(sort(freqEn, decreasing = TRUE),col='blue',main='Word TF-IDF frequencies (English)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
-plot(sort(freqEs, decreasing = TRUE),col='red',main='Word TF-IDF frequencies (Spanish)', xlab='TF-IDF-based rank', ylab = 'TF-IDF')
+plot(sort(freqEn, decreasing = TRUE), col='#2F3456', xlab='TF-IDF-based rank', ylab = 'TF-IDF', main='Word TF-IDF frequencies (English)')
+plot(sort(freqEs, decreasing = TRUE), col='#E77161', xlab='TF-IDF-based rank', ylab = 'TF-IDF', main='Word TF-IDF frequencies (Spanish)')
 print('10 most relevant words in English:'); tail(sort(freqEn),n=10)
 print('10 most relevant words in Spanish:'); tail(sort(freqEs),n=10)
 ```
 
 ```{r}
 #Word Clouds
-palEn=brewer.pal(4,'Blues')
-palEs=brewer.pal(4,'Reds')
 par(mfrow=c(1,1))
 
 unigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
@@ -233,7 +254,8 @@ layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
 par(mar=rep(0, 4))
 plot.new()
 text(x=0.5, y=0.5, "English wordcloud", cex=1.5,font=2)
-wordcloud(freqEn.df$word,freqEn.df$freq,max.words=100,random.order = FALSE, colors=palEn)
+wordcloud(freqEn.df$word,freqEn.df$freq,max.words=maxWords,random.order = FALSE, colors=brewer.pal(6,'Paired'))
+
 ```
 
 ```{r}
@@ -244,16 +266,179 @@ layout(matrix(c(1, 2), nrow=2), heights=c(1, 10))
 par(mar=rep(0, 4))
 plot.new()
 text(x=0.5, y=0.5, "Spanish wordcloud", cex=1.5,font=2)
-wordcloud(freqEs.df$word,freqEs.df$freq,max.words=100,random.order = FALSE, colors=palEs)
+wordcloud(freqEs.df$word,freqEs.df$freq,max.words=maxWords,random.order = FALSE, colors=brewer.pal(6,'Paired'))
 ```
 
+```{r}
+#Word frequencies and associations
+freqTermEn = findFreqTerms(dtmEn, lowfreq = lowFreqEn)
+assocEn = findAssocs(dtmEn, terms = freqTermEn, corlimit = 0.15)	
+freqTermEn
+assocEn
 
+freqTermEs = findFreqTerms(dtmEs, lowfreq = lowFreqEs)
+assocEs = findAssocs(dtmEs, terms = freqTermEs, corlimit = 0.15)	
+freqTermEs
+assocEs
+```
 
+&nbsp;
 
+## 7. Sentiment analysis
 
+* General trends
+* Most polarized reviews
+* Most sentiment-contributing terms
 
+```{r}
+# Adpaat params to number of reviews
+if(sampleReviews) {
+  termFreq = 40
+} else {
+  termFreq = 1500
+}
+```
 
+```{r}
+#Get sentiments data frame
+dtmEn <- DocumentTermMatrix(corpusEnT)
+dtmEnTidy <- tidy(dtmEn)
+sentimentsEn <- dtmEnTidy %>%
+  inner_join(get_sentiments('bing'), by = c(term = 'word'))
 
+positiveWordsEs <- read_csv('es_lexicons/positive_words_es.txt', col_names = "term") %>%
+  mutate(sentiment = "positive")
+negativeWordsEs <- read_csv('es_lexicons/negative_words_es.txt', col_names = "term") %>%
+  mutate(sentiment = "negative")
+sentimentWordsEs <- bind_rows(positiveWordsEs, negativeWordsEs)
+dtmEs <- DocumentTermMatrix(corpusEsT)
+dtmEsTidy <- tidy(dtmEs)
+sentimentsEs <- dtmEsTidy %>%
+  inner_join(sentimentWordsEs) %>%
+  count(document, term, sentiment, sort = TRUE) %>%
+  ungroup()
+names(sentimentsEs)[4] <- 'count'
+```
+
+### English
+```{r}
+#General trends
+sentimentsEn %>%
+  count(sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(-sentiment)
+```
+
+```{r}
+# Find most positive reviews
+posRevs <- sentimentsEn %>%
+  count(document, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(-sentiment) %>%
+  head()
+```
+
+```{r}
+# Inspect most positive doc
+sentimentsEn %>%
+  filter(document == posRevs$document[1]) %>%
+  arrange(-count)
+corpusEn[[posRevs$document[1]]][['content']]  
+
+```
+
+```{r}
+# Find most negative reviews
+negRevs <- sentimentsEn %>%
+  count(document, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(sentiment)
+```
+
+```{r}
+# Inspect most negative doc
+sentimentsEn %>%
+  filter(document == negRevs$document[1]) %>%
+  arrange(-count)
+corpusEn[[negRevs$document[1]]][['content']]
+```
+
+```{r}
+# Most sentiment-contributive words 
+sentimentsEn %>%
+  count(sentiment, term, wt = count) %>%
+  filter(n >= termFreq) %>%
+  mutate(n = ifelse(sentiment == 'negative', -n, n)) %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(term, n, fill = sentiment)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  geom_col() +
+  theme() +
+  labs(x = 'Term', y = 'Contribution to sentiment',  title = 'English')
+```
+
+### Spanish
+```{r}
+# General trends
+sentimentsEs %>%
+  count(sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(-sentiment)
+```
+
+```{r}
+# Find most positive reviews
+posRevs <- sentimentsEs %>%
+  count(document, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(-sentiment)
+```
+
+```{r}
+# Inspect most positive doc
+sentimentsEs %>%
+  filter(document == posRevs$document[1]) %>%
+  arrange(-count)
+corpusEs[[posRevs$document[1]]][['content']]
+```
+
+```{r}
+# Find most negative reviews
+negRevs <- sentimentsEs %>%
+  count(document, sentiment, wt = count) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative) %>%
+  arrange(sentiment)
+```
+
+```{r}
+# Inspect most negative doc
+sentimentsEs %>%
+  filter(document == negRevs$document[1]) %>%
+  arrange(-count)
+corpusEs[[negRevs$document[1]]][['content']]
+```
+
+```{r}
+# Most sentiment-contributive words 
+sentimentsEs %>%
+  count(sentiment, term, wt = count) %>%
+  filter(n >= termFreq) %>%
+  mutate(n = ifelse(sentiment == 'negative', -n, n)) %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(term, n, fill = sentiment)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  geom_col() +
+  theme() +
+  labs(x = "Term", y = 'Contribution to sentiment',  title = "Spanish")
+```
 
 
 

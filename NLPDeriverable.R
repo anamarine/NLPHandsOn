@@ -190,6 +190,9 @@ text(x=0.5, y=0.5, "Spanish wordcloud", cex=1.5,font=2)
 wordcloud(freqEs.df$word,freqEs.df$freq,max.words=maxWords,random.order = FALSE, colors=brewer.pal(6,'Paired'))
 
 #Word frequencies and associations
+dtmEn <- DocumentTermMatrix(corpusEnT)
+dtmEs <- DocumentTermMatrix(corpusEsT)
+
 freqTermEn = findFreqTerms(dtmEn, lowfreq = lowFreqEn)
 assocEn = findAssocs(dtmEn, terms = freqTermEn, corlimit = 0.15)	
 freqTermEn
@@ -202,7 +205,6 @@ assocEs
 
 #__ 7. Sentiment analysis ______________________________________________
 #Get sentiments data frame
-dtmEn <- DocumentTermMatrix(corpusEnT)
 dtmEnTidy <- tidy(dtmEn)
 sentimentsEn <- dtmEnTidy %>%
   inner_join(get_sentiments('bing'), by = c(term = 'word'))
@@ -212,7 +214,7 @@ positiveWordsEs <- read_csv('es_lexicons/positive_words_es.txt', col_names = "te
 negativeWordsEs <- read_csv('es_lexicons/negative_words_es.txt', col_names = "term") %>%
   mutate(sentiment = "negative")
 sentimentWordsEs <- bind_rows(positiveWordsEs, negativeWordsEs)
-dtmEs <- DocumentTermMatrix(corpusEsT)
+
 dtmEsTidy <- tidy(dtmEs)
 sentimentsEs <- dtmEsTidy %>%
   inner_join(sentimentWordsEs) %>%

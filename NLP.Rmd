@@ -271,6 +271,9 @@ wordcloud(freqEs.df$word,freqEs.df$freq,max.words=maxWords,random.order = FALSE,
 
 ```{r}
 #Word frequencies and associations
+dtmEn <- DocumentTermMatrix(corpusEnT)
+dtmEs <- DocumentTermMatrix(corpusEsT)
+
 freqTermEn = findFreqTerms(dtmEn, lowfreq = lowFreqEn)
 assocEn = findAssocs(dtmEn, terms = freqTermEn, corlimit = 0.15)	
 freqTermEn
@@ -301,7 +304,6 @@ if(sampleReviews) {
 
 ```{r}
 #Get sentiments data frame
-dtmEn <- DocumentTermMatrix(corpusEnT)
 dtmEnTidy <- tidy(dtmEn)
 sentimentsEn <- dtmEnTidy %>%
   inner_join(get_sentiments('bing'), by = c(term = 'word'))
@@ -311,7 +313,7 @@ positiveWordsEs <- read_csv('es_lexicons/positive_words_es.txt', col_names = "te
 negativeWordsEs <- read_csv('es_lexicons/negative_words_es.txt', col_names = "term") %>%
   mutate(sentiment = "negative")
 sentimentWordsEs <- bind_rows(positiveWordsEs, negativeWordsEs)
-dtmEs <- DocumentTermMatrix(corpusEsT)
+
 dtmEsTidy <- tidy(dtmEs)
 sentimentsEs <- dtmEsTidy %>%
   inner_join(sentimentWordsEs) %>%
@@ -336,8 +338,8 @@ posRevs <- sentimentsEn %>%
   count(document, sentiment, wt = count) %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative) %>%
-  arrange(-sentiment) %>%
-  head()
+  arrange(-sentiment) 
+  head(posRevs)
 ```
 
 ```{r}
@@ -356,6 +358,7 @@ negRevs <- sentimentsEn %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative) %>%
   arrange(sentiment)
+ head(negRevs)
 ```
 
 ```{r}
@@ -398,6 +401,7 @@ posRevs <- sentimentsEs %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative) %>%
   arrange(-sentiment)
+head(posRevs)
 ```
 
 ```{r}
@@ -415,6 +419,7 @@ negRevs <- sentimentsEs %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative) %>%
   arrange(sentiment)
+head(negRevs)
 ```
 
 ```{r}

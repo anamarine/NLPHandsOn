@@ -7,6 +7,7 @@
 # Instructions to run the deliverable
 
 Two options are provided to check and run the project. Both options contain the same code.
+It is important that the application file is run in the same directory that the data folder, which contains the ```reviews.csv``` file. 
 
 ## Option 1. R script
 The R script,  ```NLPDeliverable.R```, can be easily executed in an IDE like RStudio.
